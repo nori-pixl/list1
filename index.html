@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>完全共有チェックリスト</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; background: #f4f7f6; }
+        h2 { color: #333; text-align: center; }
+        .input-group { display: flex; gap: 8px; margin-bottom: 20px; }
+        input[type="text"] { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 6px; font-size: 16px; }
+        .add-btn { padding: 0 20px; background: #007AFF; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .item { display: flex; align-items: center; background: white; padding: 12px; margin-bottom: 8px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .item input { width: 20px; height: 20px; margin-right: 12px; cursor: pointer; }
+        .item span { flex: 1; font-size: 16px; color: #444; }
+        #share-btn { width: 100%; padding: 16px; background: #06C755; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #share-btn:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+
+    <h2>📋 完全共有リスト</h2>
+    
+    <div class="input-group">
+        <input type="text" id="new-item-text" placeholder="新しい項目を追加...">
+        <button class="add-btn" onclick="addItem()">追加</button>
+    </div>
+
+    <div id="list-container"></div>
+
+    <button id="share-btn" onclick="shareEverything()">サイトと内容をすべて共有</button>
+
+    <script>
+        const container = document.getElementById('list-container');
+        const input = document.getElementById('new-item-text');
+
+        // 1. 項目を追加（テキストとチェック状態を反映）
+        function addItem(text = '', checked = false) {
+            const val = text || input.value.trim();
+            if (!val) return;
+
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `
+                <input type="checkbox" ${checked ? 'checked' : ''}>
+                <span>${val}</span>
+            `;
+            container.appendChild(div);
+            input.value = '';
+        }
+
+        // 2. URLからすべての情報を復元する
+        window.addEventListener('DOMContentLoaded', () => {
+            const params = new URLSearchParams(window.location.search);
+            const dataParam = params.get('all'); 
+
+            if (dataParam) {
+                try {
+                    const decodedData = JSON.parse(decodeURIComponent(escape(atob(dataParam))));
+                    decodedData.forEach(item => addItem(item.t, item.c));
+                } catch (e) {
+                    console.error("復元失敗", e);
+                }
+            }
+        });
+
+        // 3. サイトURL ＋ 項目 ＋ 状態をすべて含めて共有
+        async function shareEverything() {
+            // 現在のリストの状態を配列にまとめる
+            const items = Array.from(container.querySelectorAll('.item')).map(div => ({
+                t: div.querySelector('span').textContent,
+                c: div.querySelector('input').checked
+            }));
+
+            // データをBase64形式の文字列に変換
+            const jsonStr = JSON.stringify(items);
+            const base64Data = btoa(unescape(encodeURIComponent(jsonStr)));
+            
+            // サイトのURL ＋ データのパラメータ
+            const fullShareUrl = window.location.origin + window.location.pathname + '?all=' + base64Data;
+            
+            // 共有するメッセージ全体
+            const shareText = `【共有されたリスト】\n${fullShareUrl}`;
+
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: '完全共有チェックリスト',
+                        text: '以下のリンクからリストの内容を確認できます：',
+                        url: fullShareUrl
+                    });
+                } catch (e) {
+                    if (e.name !== 'AbortError') openLine(shareText);
+                }
+            } else {
+                openLine(shareText);
+            }
+        }
+
+        function openLine(text) {
+            window.location.href = 'https://line.me?' + encodeURIComponent(text);
+        }
+    </script>
+</body>
+</html>
